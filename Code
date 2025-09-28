@@ -7,7 +7,7 @@ char ssid[] = "00";                                // WiFi SSID
 char pass[] = "123456789";                         // WiFi Password
 
 char blynk_server[] = "iotservices.thddns.net";    // Blynk Server (Local)
-int blynk_port = 5534;                             // Server Port
+int blynk_port = 5535;                             // Server Port
 
 #define flowPin 4   // ขาของ Flow Sensor ต่อที่ GPIO4
 
