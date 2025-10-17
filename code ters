@@ -1,0 +1,100 @@
+#include <WiFi.h>
+#include <BlynkSimpleEsp32.h>
+#include <EEPROM.h>
+#include <TimeLib.h> // ใช้กับ RTC ของ Blynk
+
+#define BLYNK_PRINT Serial
+
+// ====== WiFi + Blynk Config ======
+char auth[] = "L5ecyjAhHycvXIPjy3nUVNvaGXvUBJih";
+char ssid[] = "AccBiz_Floor3";
+char pass[] = "";
+
+// ====== Sensor Pin & ค่าเริ่มต้น ======
+#define flowPin 4
+float calibrationFactor = 7.5; // ค่าแคลิเบรตเซ็นเซอร์
+
+volatile int pulseCount = 0;
+float flowRate, totalLiters, oldTotal;
+float waterPricePerUnit = 8.77;
+float roomPrice = 2500.0;
+float totalBill;
+
+int resetDay = 1; // ค่าเริ่มต้นวันที่รีเซ็ต
+
+// ====== EEPROM Config ======
+#define EEPROM_SIZE 64
+#define ADDR_TOTAL 0
+
+// ====== Function ======
+void IRAM_ATTR pulseCounter() {
+  pulseCount++;
+}
+
+void setup() {
+  Serial.begin(115200);
+  EEPROM.begin(EEPROM_SIZE);
+
+  pinMode(FLOW_SENSOR, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(FLOW_SENSOR), pulseCounter, FALLING);
+
+  Blynk.begin(auth, ssid, pass);
+
+  oldTotal = EEPROM.readFloat(ADDR_TOTAL);
+  Serial.println("💾 โหลดค่าก่อนหน้า: " + String(oldTotal, 2) + " L");
+}
+
+void loop() {
+  Blynk.run();
+  checkResetDay();
+
+  static unsigned long oldTime = 0;
+  if (millis() - oldTime > 5000) { // คำนวณทุก 5 วิ
+    detachInterrupt(FLOW_SENSOR);
+    flowRate = ((1000.0 / (millis() - oldTime)) * pulseCount) / calibrationFactor;
+    oldTime = millis();
+    pulseCount = 0;
+    totalLiters += (flowRate / 60) * 5;
+    EEPROM.writeFloat(ADDR_TOTAL, totalLiters);
+    EEPROM.commit();
+    attachInterrupt(digitalPinToInterrupt(FLOW_SENSOR), pulseCounter, FALLING);
+
+    float usage = totalLiters - oldTotal;
+    float waterBill = usage * waterPricePerUnit;
+    totalBill = waterBill + roomPrice;
+
+    // ==== ส่งข้อมูลไป Blynk ====
+    Blynk.virtualWrite(V0, oldTotal);      // หน่วยเก่า
+    Blynk.virtualWrite(V1, totalLiters);   // หน่วยใหม่
+    Blynk.virtualWrite(V2, usage);         // ปริมาณน้ำที่ใช้
+    Blynk.virtualWrite(V3, waterBill);     // ค่าน้ำ
+    Blynk.virtualWrite(V4, totalBill);     // รวมทั้งหมด
+    Blynk.virtualWrite(V5, String(day()) + "/" + String(month()) + "/" + String(year())); // วันที่
+
+    Serial.println("💧-----------------------------");
+    Serial.println("หน่วยเก่า: " + String(oldTotal, 2) + " L");
+    Serial.println("หน่วยใหม่: " + String(totalLiters, 2) + " L");
+    Serial.println("ใช้น้ำไป: " + String(usage, 2) + " L");
+    Serial.println("ค่าน้ำ: " + String(waterBill, 2) + " ฿");
+    Serial.println("ค่าห้อง: " + String(roomPrice, 2) + " ฿");
+    Serial.println("รวมทั้งหมด: " + String(totalBill, 2) + " ฿");
+  }
+}
+
+// ====== รับค่าจาก Text Input (V6) ======
+BLYNK_WRITE(V6) {
+  resetDay = param.asInt();
+  Serial.print("📅 ตั้งวันรีเซ็ตอัตโนมัติเป็นวันที่: ");
+  Serial.println(resetDay);
+}
+
+// ====== ฟังก์ชันรีเซ็ตอัตโนมัติ ======
+void checkResetDay() {
+  if (day() == resetDay && hour() == 0 && minute() == 0 && second() < 10) {
+    oldTotal = totalLiters; // เก็บค่าก่อนหน้าไว้
+    EEPROM.writeFloat(ADDR_TOTAL, oldTotal);
+    EEPROM.commit();
+    Serial.println("♻️ รีเซ็ตค่าหน่วยใหม่อัตโนมัติ วันที่ " + String(resetDay));
+    delay(10000);
+  }
+}
