@@ -1,0 +1,156 @@
+/*************  ESP32 + YF-S201 + Blynk Legacy (custom server) + NTP  *************/
+#include <WiFi.h>
+#include <BlynkSimpleEsp32.h>
+#include <EEPROM.h>
+#include "time.h"
+
+#define BLYNK_PRINT Serial
+
+/*************  WiFi / Blynk  *************/
+char auth[] = "L5ecyjAhHycvXIPjy3nUVNvaGXvUBJih";
+char ssid[] = "Aticha";
+char pass[] = "0807450025";
+char blynk_server[] = "iotservices.thddns.net";
+int  blynk_port = 5535;
+
+/*************  NTP *************/
+const char* ntp1 = "th.pool.ntp.org";
+const char* ntp2 = "pool.ntp.org";
+const char* ntp3 = "time.nist.gov";
+const long  gmtOffset_sec      = 7 * 3600;
+const int   daylightOffset_sec = 0;
+
+/*************  Sensor *************/
+#define flowPin 4
+volatile int pulseCount = 0;
+float calibrationFactor = 4.5;   // ปรับตามคาลิเบรตจริง
+
+/*************  ตัวแปรหลัก *************/
+float flowRate = 0.0;    // L/min
+float totalLiters = 0.0; // หน่วยใหม่ (m³)
+float oldTotal = 0.0;    // หน่วยเก่า (m³)
+float pricePerUnit = 24.0;
+float roomPrice = 2500.0;
+
+/*************  Reset day / EEPROM *************/
+int resetDay = 1;
+#define EEPROM_SIZE 128
+#define ADDR_TOTAL 0
+#define ADDR_OLD 8
+#define ADDR_LAST_MONTH 16
+#define ADDR_ROOMNAME 32
+int8_t lastResetMonth = -1;
+String roomName = "ไม่ระบุ";
+
+/*************  Blynk *************/
+BlynkTimer timer;
+
+/*************  Interrupt *************/
+void IRAM_ATTR pulseCounter() { pulseCount++; }
+
+/*************  EEPROM Helper *************/
+void saveString(int addr, String data) {
+  int len = data.length();
+  for (int i = 0; i < len; i++) EEPROM.write(addr + i, data[i]);
+  EEPROM.write(addr + len, '\0');
+  EEPROM.commit();
+}
+String readString(int addr) {
+  char buf[50];
+  int i = 0;
+  unsigned char c = EEPROM.read(addr);
+  while (c != '\0' && i < 49) { buf[i++] = c; c = EEPROM.read(addr + i); }
+  buf[i] = '\0';
+  return String(buf);
+}
+
+/*************  Load EEPROM *************/
+void loadEEPROM() {
+  EEPROM.get(ADDR_TOTAL, totalLiters);
+  EEPROM.get(ADDR_OLD, oldTotal);
+  EEPROM.get(ADDR_LAST_MONTH, lastResetMonth);
+  roomName = readString(ADDR_ROOMNAME);
+  if (roomName == "") roomName = "ไม่ระบุ";
+}
+
+/*************  Blynk *************/
+BLYNK_CONNECTED() {
+  Blynk.virtualWrite(V12, roomName);
+}
+
+BLYNK_WRITE(V12) { // กรอกชื่อห้องใน Text Input
+  roomName = param.asStr();
+  if (roomName == "") roomName = "ไม่ระบุ";
+  saveString(ADDR_ROOMNAME, roomName);
+  Serial.println("🏠 Room name set to: " + roomName);
+}
+
+/*************  คำนวณ *************/
+void computeAndPush() {
+  static unsigned long lastMs = millis();
+
+  detachInterrupt(digitalPinToInterrupt(flowPin));
+  unsigned long now = millis();
+  unsigned long dt  = now - lastMs; if (dt == 0) dt = 1;
+
+  float pulsesPerSec = (pulseCount * 1000.0) / (float)dt;
+  flowRate = pulsesPerSec / calibrationFactor;   // L/min
+  pulseCount = 0;
+  lastMs = now;
+  attachInterrupt(digitalPinToInterrupt(flowPin), pulseCounter, FALLING);
+
+  totalLiters += (flowRate / 60.0) / 1000.0; // เพิ่มหน่วยเป็นม³
+  EEPROM.put(ADDR_TOTAL, totalLiters);
+  EEPROM.commit();
+
+  float used = totalLiters - oldTotal;
+  if (used < 0) used = 0;
+  float waterTotal = used * pricePerUnit;
+  float totalPrice = waterTotal + roomPrice;
+
+  // ส่งขึ้น Blynk
+  Blynk.virtualWrite(V0, oldTotal);
+  Blynk.virtualWrite(V1, totalLiters);
+  Blynk.virtualWrite(V2, used);
+  Blynk.virtualWrite(V4, waterTotal);
+  Blynk.virtualWrite(V5, roomPrice);
+  Blynk.virtualWrite(V7, totalPrice);
+
+  // Serial monitor
+  Serial.println();
+  Serial.println("🏠 Room: " + roomName);
+  Serial.println("💧 Used: " + String(used, 3) + " m³");
+  Serial.println("💰 Water: " + String(waterTotal, 2) + " ฿");
+  Serial.println("🏢 Room Fee: " + String(roomPrice, 2) + " ฿");
+  Serial.println("💵 Total: " + String(totalPrice, 2) + " ฿");
+  Serial.println("----------------------------------------");
+}
+
+/*************  Setup *************/
+void setup() {
+  Serial.begin(115200);
+  EEPROM.begin(EEPROM_SIZE);
+  loadEEPROM();
+
+  WiFi.begin(ssid, pass);
+  while (WiFi.status() != WL_CONNECTED) { delay(400); Serial.print("."); }
+  Serial.println("\n✅ WiFi connected");
+  configTime(gmtOffset_sec, daylightOffset_sec, ntp1, ntp2, ntp3);
+
+  Blynk.config(auth, blynk_server, blynk_port);
+  Blynk.connect();
+
+  pinMode(flowPin, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(flowPin), pulseCounter, FALLING);
+
+  timer.setInterval(1000, computeAndPush);
+}
+
+/*************  Loop *************/
+void loop() {
+  if (WiFi.status() == WL_CONNECTED) {
+    Blynk.run();
+    if (!Blynk.connected()) Blynk.connect();
+  }
+  timer.run();
+}
