@@ -17,3 +17,18 @@ if (!prev) {
     }
   };
 }
+
+// ------ แปลงผลลัพธ์จาก HTTP ------
+const raw   = $json.body ?? $json;                 // รองรับ HTTP node ที่ใส่ใน body
+const arr   = Array.isArray(raw) ? raw : (raw?.result ?? raw?.data);
+const first = arr?.[0] ?? raw?.value ?? raw;
+
+// แปลงเป็นตัวเลข ป้องกัน NaN
+const value = Number(first);
+return {
+  json: {
+    pin:  prev.pin,
+    key:  prev.key,
+    value: Number.isFinite(value) ? value : 0
+  }
+};
