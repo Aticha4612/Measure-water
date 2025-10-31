@@ -1,246 +1,75 @@
-/*************  ESP32 + YF-S201 + Blynk Legacy (custom server) + NTP (auto monthly reset) *************/
-#include <WiFi.h>
-#include <BlynkSimpleEsp32.h>
-#include <EEPROM.h>
-#include "time.h"   // NTP
+// Code #2 (mini-flex) รองรับทั้ง key/value และ pin/body
+const rows = $input.all().map(x => x.json);
 
-#define BLYNK_PRINT Serial
+// คืนค่าฟิลด์ที่มีอยู่จริง (value > body > val)
+const pickVal = r => r?.value ?? r?.body ?? r?.val ?? null;
 
-/*************  Blynk / WiFi (Legacy + custom server)  *************/
-char auth[]         = "HU4tksvBuZJJfXuSU_7sOlHq1KpHQ_DC";
-char ssid[]         = "Aticha";
-char pass[]         = "0807450025";
-char blynk_server[] = "iotservices.thddns.net";
-int  blynk_port     = 5535;
-
-/*************  NTP (เวลาไทย)  *************/
-const char* ntp1 = "th.pool.ntp.org";
-const char* ntp2 = "pool.ntp.org";
-const char* ntp3 = "time.nist.gov";
-const long  gmtOffset_sec      = 7 * 3600; // UTC+7
-const int   daylightOffset_sec = 0;
-
-/*************  Sensor (YF-S201)  *************/
-#define flowPin 4
-volatile int   pulseCount = 0;
-float          calibrationFactor = 7.5;   // (YF-S201 ทั่วไป ~7.5)
-
-float flowRate     = 0.0;  // m³/min (อัตราการไหล)
-float totalLiters  = 0.0;  // L (เก็บสะสม)
-float oldTotal     = 0.0;  // L (รอบก่อนหน้า)
-
-/*************  Billing params  *************/
-float pricePerUnit = 24.0;     // บาท/หน่วย
-float roomPrice    = 2500.0;   // บาท
-String roomNumber  = "Room 101";
-
-/*************  Reset params (Day + Time)  *************/
-int  resetDay = 1;       // วันที่ตัดรอบ
-int  resetHour = 0;      // ชั่วโมงรีเซ็ต
-int  resetMinute = 0;    // นาทีรีเซ็ต
-
-/*************  EEPROM layout  *************/
-#define EEPROM_SIZE      64
-#define ADDR_TOTAL        0   // float totalLiters
-#define ADDR_OLD          8   // float oldTotal
-#define ADDR_LAST_MONTH  16   // int8_t lastResetMonth
-
-/*************  State  *************/
-int8_t lastResetMonth = -1;
-
-/*************  Blynk Timer  *************/
-BlynkTimer timer;
-
-/* ==================== Interrupt ==================== */
-void IRAM_ATTR pulseCounter() { pulseCount++; }
-
-/* ==================== EEPROM helpers ==================== */
-void loadEEPROM() {
-  EEPROM.get(ADDR_TOTAL, totalLiters);
-  EEPROM.get(ADDR_OLD,   oldTotal);
-  EEPROM.get(ADDR_LAST_MONTH, lastResetMonth);
-
-  if (!isfinite(totalLiters) || totalLiters < 0) totalLiters = 0;
-  if (!isfinite(oldTotal)    || oldTotal    < 0) oldTotal    = totalLiters;
-  if (lastResetMonth < -1 || lastResetMonth > 11) lastResetMonth = -1;
-
-  Serial.println("💾 totalLiters=" + String(totalLiters,3));
-  Serial.println("💾 oldTotal   =" + String(oldTotal,3));
-  Serial.println("💾 lastMonth  =" + String(lastResetMonth));
-}
-inline void saveTotal()       { EEPROM.put(ADDR_TOTAL, totalLiters); EEPROM.commit(); }
-inline void saveOld()         { EEPROM.put(ADDR_OLD,   oldTotal);    EEPROM.commit(); }
-inline void saveLastMonth()   { EEPROM.put(ADDR_LAST_MONTH, lastResetMonth); EEPROM.commit(); }
-
-/* ==================== Blynk Connected ==================== */
-BLYNK_CONNECTED() {
-  Serial.println("✅ Blynk connected");
-  Blynk.virtualWrite(V12, roomNumber);
-}
-
-/* ตั้งหมายเลขห้อง (Text Input V12) */
-BLYNK_WRITE(V12) {
-  roomNumber = param.asStr();
-  Serial.println("🏠 Room set to: " + roomNumber);
-}
-
-/* ตั้งวันรีเซ็ต (Text Input V6) */
-BLYNK_WRITE(V6) {
-  int d = param.asInt();
-  if (d < 1) d = 1;
-  if (d > 31) d = 31;
-  resetDay = d;
-  Serial.println("📅 Reset Day = " + String(resetDay));
-}
-
-/* ตั้งเวลารีเซ็ต (Time Input V13) */
-BLYNK_WRITE(V13) {
-  TimeInputParam t(param);
-  resetHour   = t.getStartHour();
-  resetMinute = t.getStartMinute();
-  Serial.println("⏰ Reset Time = " + String(resetHour) + ":" + String(resetMinute));
-}
-
-/* ตั้งหน่วยเก่าด้วยมือ (V9) */
-BLYNK_WRITE(V9) {
-  String raw = param.asStr();
-  if (raw.length() == 0) return;
-  float v = raw.toFloat();
-  if (!isfinite(v) || v < 0) v = 0;
-  oldTotal = v * 1000.0; // m³ → L
-  saveOld();
-  Blynk.virtualWrite(V0, v);
-  Serial.println("✅ Set oldTotal = " + String(v,3) + " m³");
-}
-
-/* ตั้งหน่วยใหม่ด้วยมือ (V11) */
-BLYNK_WRITE(V11) {
-  String raw = param.asStr();
-  if (raw.length() == 0) return;
-  float v = raw.toFloat();
-  if (!isfinite(v) || v < 0) v = 0;
-  totalLiters = v * 1000.0; // m³ → L
-  saveTotal();
-  Serial.println("✅ Set totalLiters = " + String(v,3) + " m³");
-}
-
-/* ปุ่มรีเซ็ตเอง (V10) */
-BLYNK_WRITE(V10) {
-  if (param.asInt() == 1) {
-    oldTotal = totalLiters;
-    saveOld();
-    struct tm t; 
-    if (getLocalTime(&t)) { lastResetMonth = t.tm_mon; saveLastMonth(); }
-    Serial.println("🔘 Manual reset → oldTotal = " + String(oldTotal / 1000.0,3) + " m³");
-    Blynk.virtualWrite(V0, oldTotal / 1000.0);
+// แปลง string หรือ '["123.45"]' -> number
+const toNum = v => {
+  if (v == null) return null;
+  if (typeof v === 'string') {
+    let s = v.trim();
+    if (s.startsWith('[') && s.endsWith(']')) { try { v = JSON.parse(s)[0]; } catch {} }
+    v = String(v).replace(/[^0-9.+-Ee]/g,'');
   }
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
+// หาค่าตามชื่อหลายแบบ: ทั้งจาก key และ pin
+function findBy(names) {
+  names = names.map(s => String(s).toLowerCase());
+  // หา row ให้ตรงก่อน: เทียบทั้ง key/pin (lowercase)
+  const r = rows.find(r => {
+    const k = String(r.key ?? '').toLowerCase();
+    const p = String(r.pin ?? '').toLowerCase();
+    return names.includes(k) || names.includes(p);
+  });
+  return r ? pickVal(r) : null;
 }
 
-/* ==================== เวลา (NTP) ==================== */
-bool getNow(struct tm &t) { return getLocalTime(&t); }
+// ----- ดึงค่าที่ต้องการ -----
+// v12/roomName เป็นสตริง
+const roomNameRaw = findBy(['v12','roomname','room','site_name','name']);
+const roomName    = (roomNameRaw == null)
+  ? 'ไม่ระบุ'
+  : (typeof roomNameRaw === 'string'
+      ? (roomNameRaw.startsWith('[') && roomNameRaw.endsWith(']')
+          ? (JSON.parse(roomNameRaw)[0] ?? 'ไม่ระบุ')
+          : roomNameRaw)
+      : String(roomNameRaw));
 
-void pushDateToBlynk() {
-  struct tm t;
-  if (getNow(t)) {
-    char buf[16];
-    strftime(buf, sizeof(buf), "%d/%m/%Y", &t);
-    Blynk.virtualWrite(V8, buf);
-  } else {
-    Blynk.virtualWrite(V8, "sync...");
+// ตัวเลข
+const startUnit   = toNum(findBy(['v0','startunit','start'])) ?? 0;
+const endUnit     = toNum(findBy(['v1','endunit','end']))     ?? 0;
+let   used        = toNum(findBy(['v2','used','usedunit']));
+let   waterTotal  = toNum(findBy(['v4','watertotal']));
+const roomPrice   = toNum(findBy(['v5','roomprice'])) ?? 2500;
+
+// เดา/ตั้งค่า pricePerUnit: ถ้ามี v4 และ v2 ใช้คำนวณ, ไม่งั้น ENV (default 24)
+let pricePerUnit  = toNum(findBy(['priceperunit']));
+if (pricePerUnit == null) {
+  if (waterTotal != null && used != null && used > 0) pricePerUnit = waterTotal / used;
+  else pricePerUnit = Number($env.PRICE_PER_UNIT ?? 24);
+}
+
+// ถ้าไม่ได้ส่ง v2/v4 มา ให้คำนวณเอง
+if (used == null)        used = Math.max(0, endUnit - startUnit);
+if (waterTotal == null)  waterTotal = used * pricePerUnit;
+
+const totalPrice = (waterTotal ?? 0) + (roomPrice ?? 0);
+
+// ----- ส่งออก (ปัดทศนิยม) -----
+return [{
+  json: {
+    Timestamp   : new Date().toISOString(),
+    Room        : roomName,
+    StartUnit   : Number(startUnit.toFixed(3)),
+    EndUnit     : Number(endUnit.toFixed(3)),
+    UsedUnit    : Number(used.toFixed(3)),
+    PricePerUnit: Number(pricePerUnit.toFixed(2)),
+    WaterTotal  : Number(waterTotal.toFixed(2)),
+    RoomPrice   : Number(roomPrice.toFixed(2)),
+    TotalPrice  : Number(totalPrice.toFixed(2)),
   }
-}
-
-/* ==================== รีเซ็ตอัตโนมัติ (วัน + เวลา) ==================== */
-void checkResetDay() {
-  struct tm t;
-  if (!getNow(t)) return;
-
-  static bool resetDone = false;
-  if (t.tm_mday == resetDay && t.tm_hour == resetHour && t.tm_min == resetMinute) {
-    if (!resetDone) {
-      oldTotal = totalLiters;
-      saveOld();
-
-      lastResetMonth = t.tm_mon;
-      saveLastMonth();
-
-      float old_m3 = oldTotal / 1000.0;
-      Blynk.virtualWrite(V0, old_m3);
-
-      Serial.println("♻️ Auto reset → oldTotal = " + String(old_m3,3) + " m³");
-      resetDone = true;
-    }
-  } else {
-    resetDone = false;
-  }
-}
-
-/* ==================== คำนวณและส่งค่า - m³ ==================== */
-void computeAndPush() {
-  static unsigned long lastMs = millis();
-
-  detachInterrupt(digitalPinToInterrupt(flowPin));
-  unsigned long now = millis();
-  unsigned long dt  = now - lastMs; if (dt == 0) dt = 1;
-
-  float pulsesPerSec = (pulseCount * 1000.0) / (float)dt;
-  flowRate = (pulsesPerSec / calibrationFactor) / 1000.0; // m³/min
-  pulseCount = 0;
-  lastMs = now;
-  attachInterrupt(digitalPinToInterrupt(flowPin), pulseCounter, FALLING);
-
-  totalLiters += (flowRate / 60.0) * ((float)dt / 1000.0); // L → สะสม
-  saveTotal();
-
-  float old_m3    = oldTotal / 1000.0;
-  float total_m3  = totalLiters / 1000.0;
-  float used_m3   = max(0.0f, total_m3 - old_m3);
-  float waterTotal = used_m3 * pricePerUnit;
-  float totalPrice = waterTotal + roomPrice;
-
-  Blynk.virtualWrite(V0, old_m3);
-  Blynk.virtualWrite(V1, total_m3);
-  Blynk.virtualWrite(V2, used_m3);
-  Blynk.virtualWrite(V3, flowRate);
-  Blynk.virtualWrite(V4, waterTotal);
-  Blynk.virtualWrite(V5, roomPrice);
-  Blynk.virtualWrite(V7, totalPrice);
-
-  Serial.print("💧 ");
-  Serial.printf("[%s] Rate:%.6f m³/min | old:%.3f new:%.3f used:%.3f | total=%.2f฿\n",
-                roomNumber.c_str(), flowRate, old_m3, total_m3, used_m3, totalPrice);
-}
-
-/* ==================== Setup / Loop ==================== */
-void setup() {
-  Serial.begin(115200);
-  delay(300);
-
-  WiFi.begin(ssid, pass);
-  Serial.print("WiFi connecting");
-  while (WiFi.status() != WL_CONNECTED) { delay(400); Serial.print("."); }
-  Serial.println("\n✅ WiFi connected, IP: " + WiFi.localIP().toString());
-
-  configTime(gmtOffset_sec, daylightOffset_sec, ntp1, ntp2, ntp3);
-
-  Blynk.config(auth, blynk_server, blynk_port);
-  Blynk.connect();
-
-  EEPROM.begin(EEPROM_SIZE);
-  loadEEPROM();
-
-  pinMode(flowPin, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(flowPin), pulseCounter, FALLING);
-
-  timer.setInterval(1000, computeAndPush);
-  timer.setInterval(1000, checkResetDay);
-  timer.setInterval(5000, pushDateToBlynk);
-}
-
-void loop() {
-  if (WiFi.status() == WL_CONNECTED) {
-    Blynk.run();
-    if (!Blynk.connected()) Blynk.connect();
-  }
-  timer.run();
-}
+}];
