@@ -1,4 +1,3 @@
-#Code #1
 // index ของไอเท็มปัจจุบัน (รองรับทั้ง $input.itemIndex และ $itemIndex)
 const idx = ($input?.itemIndex ?? $itemIndex ?? 0);
 
