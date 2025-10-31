@@ -1,0 +1,431 @@
+{
+  "name": "ex-1",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "// Build vPins (MINI)\nreturn [\n  { json: { pin: 'V0',  key: 'startUnit' } },  // หน่วยเก่า (m³)\n  { json: { pin: 'V1',  key: 'endUnit'   } },  // หน่วยใหม่ (m³)\n  { json: { pin: 'V2',  key: 'usedUnit'   } },// หน่วยที่ใช้\n  { json: { pin: 'V4',  key: 'waterTotal'   } }, // คำนวณค่าน้ำ\n  { json: { pin: 'V5',  key: 'roomPrice' } },  // ค่าห้อง (บาท)\n  { json: { pin: 'V12', key: 'roomName'  } },  // ★ ชื่อห้อง (Text)\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2064,
+        -624
+      ],
+      "id": "a6b52801-3aee-46f0-abab-29b305fc6ebf",
+      "name": "Build vPins"
+    },
+    {
+      "parameters": {
+        "url": "={{\n  ($env.BLYNK_BASE || 'http://iotservices.thddns.net:5535') + '/' +\n  ($env.BLYNK_TOKEN || 'L5ecyjAhHycvXIPjy3nUVNvaGXvUBJih') +\n  '/get/' + $json.pin\n}}\n",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "ac6ca3c5-d29f-4e6b-84d9-a2a9fa6549f5",
+      "name": "HTTP Request1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1888,
+        -576
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "e6f5fe0b-d001-457e-82bf-1449a8449981",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -2368,
+        -720
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1ten64JcNk1VR1-jLvh4VFJgLNqaGLWEStQn9fzJ_B80",
+          "mode": "list",
+          "cachedResultName": "Data",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ten64JcNk1VR1-jLvh4VFJgLNqaGLWEStQn9fzJ_B80/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "ชีต1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1ten64JcNk1VR1-jLvh4VFJgLNqaGLWEStQn9fzJ_B80/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{$json[\"Timestamp\"]}}",
+            "StartUnit": "={{ $json[\"StartUnit\"] }}",
+            "EndUnit": "={{ $json[\"EndUnit\"] }}",
+            "UsedUnit": "={{ $json[\"UsedUnit\"] }}",
+            "WaterTotal": "={{ $json[\"WaterTotal\"] }}",
+            "RoomPrice": "={{ $json[\"RoomPrice\"] }}",
+            "TotalPrice": "={{ $json[\"TotalPrice\"] }}",
+            "Room": "={{ $json.Room }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Room",
+              "displayName": "Room",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "StartUnit",
+              "displayName": "StartUnit",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "EndUnit",
+              "displayName": "EndUnit",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "UsedUnit",
+              "displayName": "UsedUnit",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "WaterTotal",
+              "displayName": "WaterTotal",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "RoomPrice",
+              "displayName": "RoomPrice",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "TotalPrice",
+              "displayName": "TotalPrice",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -1328,
+        -672
+      ],
+      "id": "0ee42085-ee6b-430a-82c0-0615664517ed",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleApi": {
+          "id": "1W8OEG053MeGlInB",
+          "name": "Google Sheets account Aticha"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "pdf",
+        "templateId": "d7f77b236385bc72",
+        "data": "={\n    \"company_name\": \"Nam Tan Wan House\",\n    \"company_address\": \"Mahasarakham, Thailand\",\n    \"company_email\": \"aticha7426@gmail.com\",\n    \"bill_to\": \"{{ $json.name }}\",\n    \"bill_to_address\": \"123 หมู่1 ต.ตลาด อ.เมือง จ.มหาสารคาม 44000\",\n    \"invoice_date\":\"{{ $json.InvoiceDate }}\",\n    \"invoice_due_date\": \"{{ $json.DueDate }}\",\n    \"items\": [\n        {\n          \"description\": \"ค่าห้อง\",\n          \"start\": 0,\n          \"end\": 0,\n          \"qty\": 1,\n          \"unitprice\":\"{{ $json.RoomPrice }}\"\n        },\n        {\n          \"description\": \"ค่าน้ำ\",\n          \"start\": \"{{ $json.StartUnit }}\",\n          \"end\": \"{{ $json.EndUnit }}\",\n          \"qty\": \"{{ $json.UsedUnit }}\",\n          \"unitprice\": 24\n        }\n    ],\n    \"logo\": \"https://craftmypdf-upload.s3-ap-southeast-1.amazonaws.com/3e9/b0d7c504-4ee7-4173-aa2d-12b16ec10814.png\",\n    \"currency\": \"฿\"\n}",
+        "output_file": "={{ 'ใบแจ้งหนี้' + $json.date + '.pdf'}}"
+      },
+      "type": "n8n-nodes-craftmypdf.craftMyPdf",
+      "typeVersion": 1,
+      "position": [
+        -1120,
+        -480
+      ],
+      "id": "b7f54b54-af94-4c7e-a714-6f00f4747777",
+      "name": "Create a PDF",
+      "credentials": {
+        "craftMyPdfApi": {
+          "id": "yKBuIXJmIrrmAXIM",
+          "name": "CraftMyPDF account Aticha"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.file }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "=Water"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -912,
+        -576
+      ],
+      "id": "cca6ea71-4b27-46f0-b326-e45265264492",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "fromEmail": "aticha.chairsi@gmail.com",
+        "toEmail": "65010914612@msu.ac.th",
+        "subject": "=ใบแจ้งหนี้ค่าน้ำประจำวันที่ {{ $('Code#3').item.json.date }}",
+        "html": "=เรียนผู้ใช้น้ำ<br><br>\nกรุณาตรวจสอบใบแจ้งหนี้ค่าน้ำของคุณได้จากไฟล์แนบด้านล่างค่ะ 💧<br><br>\nขอบคุณที่ใช้บริการ 💙",
+        "options": {
+          "attachments": "=Water"
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        -720,
+        -672
+      ],
+      "id": "43cad00c-58c9-466f-9037-06cc8db83c4e",
+      "name": "Send email",
+      "webhookId": "2dab980a-4abe-4d0e-840f-61f5f98fffc7",
+      "credentials": {
+        "smtp": {
+          "id": "PSX42zVLopoG3aKu",
+          "name": "SMTP account Aticha"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// index ของไอเท็มปัจจุบัน (รองรับทั้ง $input.itemIndex และ $itemIndex)\nconst idx = ($input?.itemIndex ?? $itemIndex ?? 0);\n\n// ดึงรายการจาก node \"Build vPins\"\nconst vpins = $items('Build vPins', 0); // ← ชื่อ node ต้องตรงเป๊ะ\nconst prev  = vpins?.[idx]?.json;\n\n// ถ้าแมตช์ไม่ได้ ให้ส่ง error-friendly payload กลับไปแทนจะได้ดีบักง่าย\nif (!prev) {\n  return {\n    json: {\n      error: `No matching vPin at index ${idx}. Check node name \"Build vPins\" and connection order.`,\n      idx,\n      have_vpins: Array.isArray(vpins) ? vpins.length : 0,\n      raw_input: $json\n    }\n  };\n}\n\n// ------ แปลงผลลัพธ์จาก HTTP ------\nconst raw   = $json.body ?? $json;                 // รองรับ HTTP node ที่ใส่ใน body\nconst arr   = Array.isArray(raw) ? raw : (raw?.result ?? raw?.data);\nconst first = arr?.[0] ?? raw?.value ?? raw;\n\n// แปลงเป็นตัวเลข ป้องกัน NaN\nconst value = Number(first);\nreturn {\n  json: {\n    pin:  prev.pin,\n    key:  prev.key,\n    value: Number.isFinite(value) ? value : 0\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1696,
+        -480
+      ],
+      "id": "0cc92ace-543a-476a-8d11-961123dd3316",
+      "name": "Code #1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Code #2 (mini-flex) รองรับทั้ง key/value และ pin/body\nconst rows = $input.all().map(x => x.json);\n\n// คืนค่าฟิลด์ที่มีอยู่จริง (value > body > val)\nconst pickVal = r => r?.value ?? r?.body ?? r?.val ?? null;\n\n// แปลง string หรือ '[\"123.45\"]' -> number\nconst toNum = v => {\n  if (v == null) return null;\n  if (typeof v === 'string') {\n    let s = v.trim();\n    if (s.startsWith('[') && s.endsWith(']')) { try { v = JSON.parse(s)[0]; } catch {} }\n    v = String(v).replace(/[^0-9.+-Ee]/g,'');\n  }\n  const n = Number(v);\n  return Number.isFinite(n) ? n : null;\n};\n\n// หาค่าตามชื่อหลายแบบ: ทั้งจาก key และ pin\nfunction findBy(names) {\n  names = names.map(s => String(s).toLowerCase());\n  // หา row ให้ตรงก่อน: เทียบทั้ง key/pin (lowercase)\n  const r = rows.find(r => {\n    const k = String(r.key ?? '').toLowerCase();\n    const p = String(r.pin ?? '').toLowerCase();\n    return names.includes(k) || names.includes(p);\n  });\n  return r ? pickVal(r) : null;\n}\n\n// ----- ดึงค่าที่ต้องการ -----\n// v12/roomName เป็นสตริง\nconst roomNameRaw = findBy(['v12','roomname','room','site_name','name']);\nconst roomName    = (roomNameRaw == null)\n  ? 'ไม่ระบุ'\n  : (typeof roomNameRaw === 'string'\n      ? (roomNameRaw.startsWith('[') && roomNameRaw.endsWith(']')\n          ? (JSON.parse(roomNameRaw)[0] ?? 'ไม่ระบุ')\n          : roomNameRaw)\n      : String(roomNameRaw));\n\n// ตัวเลข\nconst startUnit   = toNum(findBy(['v0','startunit','start'])) ?? 0;\nconst endUnit     = toNum(findBy(['v1','endunit','end']))     ?? 0;\nlet   used        = toNum(findBy(['v2','used','usedunit']));\nlet   waterTotal  = toNum(findBy(['v4','watertotal']));\nconst roomPrice   = toNum(findBy(['v5','roomprice'])) ?? 2500;\n\n// เดา/ตั้งค่า pricePerUnit: ถ้ามี v4 และ v2 ใช้คำนวณ, ไม่งั้น ENV (default 24)\nlet pricePerUnit  = toNum(findBy(['priceperunit']));\nif (pricePerUnit == null) {\n  if (waterTotal != null && used != null && used > 0) pricePerUnit = waterTotal / used;\n  else pricePerUnit = Number($env.PRICE_PER_UNIT ?? 24);\n}\n\n// ถ้าไม่ได้ส่ง v2/v4 มา ให้คำนวณเอง\nif (used == null)        used = Math.max(0, endUnit - startUnit);\nif (waterTotal == null)  waterTotal = used * pricePerUnit;\n\nconst totalPrice = (waterTotal ?? 0) + (roomPrice ?? 0);\n\n// ----- ส่งออก (ปัดทศนิยม) -----\nreturn [{\n  json: {\n    Timestamp   : new Date().toISOString(),\n    Room        : roomName,\n    StartUnit   : Number(startUnit.toFixed(3)),\n    EndUnit     : Number(endUnit.toFixed(3)),\n    UsedUnit    : Number(used.toFixed(3)),\n    PricePerUnit: Number(pricePerUnit.toFixed(2)),\n    WaterTotal  : Number(waterTotal.toFixed(2)),\n    RoomPrice   : Number(roomPrice.toFixed(2)),\n    TotalPrice  : Number(totalPrice.toFixed(2)),\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1520,
+        -496
+      ],
+      "id": "3e0b7010-b791-4713-9d1a-64c951d4aba8",
+      "name": "Code#2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const customer = items[0].json;\n\n// -----------------------------\n// 🕓 ตั้งค่าจำนวนวันที่ครบกำหนด\n// เปลี่ยนเลขนี้ได้ตามต้องการ เช่น 7 = ครบกำหนด 7 วันหลังออกบิล\n// -----------------------------\nconst daysToAdd = 7;\n\n// วันที่ออกใบแจ้งหนี้ (วันนี้)\nconst now = new Date();\nconst invoice_date = now.toISOString().split('T')[0]; // เช่น \"2025-10-26\"\n\n// วันที่ครบกำหนด (เพิ่มตาม daysToAdd)\nconst due_date = new Date(now);\ndue_date.setDate(now.getDate() + daysToAdd);\nconst invoice_due_date = due_date.toISOString().split('T')[0];\n\n// -----------------------------\n// ✅ กำหนดชื่อห้องจากค่า Room ที่มาจาก Node ก่อนหน้า\n// -----------------------------\nconst roomName = `หอพัก room ${customer.Room}`;\n\nreturn [\n  {\n    json: {\n      name: roomName, // ✅ ชื่อห้องอัตโนมัติจาก Room\n      StartUnit: customer.StartUnit,       // หน่วยเก่า\n      EndUnit: customer.EndUnit,           // หน่วยใหม่\n      UsedUnit: customer.UsedUnit,         // หน่วยที่ใช้\n      WaterTotal: customer.WaterTotal,     // ค่าน้ำ\n      RoomPrice: customer.RoomPrice,       // ค่าห้อง\n      TotalPrice: customer.TotalPrice,     // รวมทั้งหมด\n\n      InvoiceDate: invoice_date,           // วันที่ออกบิล\n      DueDate: invoice_due_date,           // วันครบกำหนด\n      date: now.toLocaleDateString('th-TH'), // แสดงวันที่ไทย\n\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1312,
+        -384
+      ],
+      "id": "9d357ebf-61cc-4f58-9cbc-2acf49d3825d",
+      "name": "Code#3"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "months",
+              "triggerAtDayOfMonth": 31,
+              "triggerAtHour": 13,
+              "triggerAtMinute": 30
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -2352,
+        -464
+      ],
+      "id": "1a8f329b-ea7d-4ac3-b583-f25581afe3b2",
+      "name": "Schedule Trigger"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Build vPins": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Code #1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build vPins",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a PDF": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Send email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code #1": {
+      "main": [
+        [
+          {
+            "node": "Code#2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code#2": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code#3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code#3": {
+      "main": [
+        [
+          {
+            "node": "Create a PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Build vPins",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "c986c04b-fbd4-4479-9660-140145d18b2c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "9e2d5893c95508e932189a8a8e61bdd624a2810992f48ed3f88d2342879f29a1"
+  },
+  "id": "bAbORfBt7HMR4yrO",
+  "tags": []
+}
